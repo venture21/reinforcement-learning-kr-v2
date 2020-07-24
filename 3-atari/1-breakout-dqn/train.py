@@ -151,64 +151,85 @@ def pre_processing(observe):
 
 
 if __name__ == "__main__":
-    # 환경과 DQN 에이전트 생성
+    # 1. 환경을 불러온다.
     env = gym.make('BreakoutDeterministic-v4')
+    # 2. agent를 생성한다.
     agent = DQNAgent(action_size=3)
 
+    # 3.1. 변수를 선언하고 초기화 한다.
     global_step = 0
     score_avg = 0
     score_max = 0
-
-    # 불필요한 행동을 없애주기 위한 딕셔너리 선언
+    
+    # 3.2. 최대로 학습할 에피소드 값을 설정한다.
+    num_episode = 50000
+    
+    # 3.3. 불필요한 행동을 없애주기 위한 딕셔너리 선언
     action_dict = {0:1, 1:2, 2:3, 3:3}
 
-    num_episode = 50000
+    # 4. 정해준 에피소드만큼 학습을 진행한다.
     for e in range(num_episode):
         done = False
         dead = False
-
+        
+        # 4.1. 스텝, 스코어값을 초기화하고, 목숨 5개가 주어진다. 
         step, score, start_life = 0, 0, 5
-        # env 초기화
+        # 4.2. 환경의 초기값을 가져온다.
         observe = env.reset()
 
-        # 랜덤으로 뽑힌 값 만큼의 프레임동안 움직이지 않음
+        # 4.3. 랜덤으로 뽑힌 값 만큼의 프레임동안 움직이지 않음
         for _ in range(random.randint(1, agent.no_op_steps)):
             observe, _, _, _ = env.step(1)
 
-        # 프레임을 전처리 한 후 4개의 상태를 쌓아서 입력값으로 사용.
+        # 4.4. 환경의 초기값을 이미지 전처리 한다.
         state = pre_processing(observe)
+        
+        # 4.5. 전처리된 이미지 4장을 히스토리로 만든다. 
+        #      초기화이므로 동일한 이미지로 히스토리를 만든다.
         history = np.stack((state, state, state, state), axis=2)
         history = np.reshape([history], (1, 84, 84, 4))
 
+        # 4.6. 게임이 끝날 때까지 계속 실행하는 while문
         while not done:
+            
+            # 4.6.1. render의 유무를 확인한다.
+            #        render의 유무에 따라 학습 속도가 달라진다.
             if agent.render:
                 env.render()
+            
+            # 4.6.2. 글로벌 스텝, 스텝을 하나 증가한다.
             global_step += 1
             step += 1
 
-            # 바로 전 history를 입력으로 받아 행동을 선택
+            # 4.6.3. 바로 전 history를 입력으로 받아 행동을 선택
             action = agent.get_action(history)
             # 1: 정지, 2: 왼쪽, 3: 오른쪽
             real_action = action_dict[action]
 
-            # 죽었을 때 시작하기 위해 발사 행동을 함
+            # 4.6.4. 만약 죽었다면, 다시 시작하기 위해 발사 행동을 함
             if dead:
                 action, real_action, dead = 0, 1, False
 
-            # 선택한 행동으로 환경에서 한 타임스텝 진행
+            # 4.6.5. 선택한 행동으로 환경에서 한 타임스텝 진행
             observe, reward, done, info = env.step(real_action)
-            # 각 타임스텝마다 상태 전처리
+
+            # 4.6.6. 각 타임스텝마다 상태 전처리
+            #        기존 3장의 히스토리에 새로운 이미지를 추가
             next_state = pre_processing(observe)
             next_state = np.reshape([next_state], (1, 84, 84, 1))
             next_history = np.append(next_state, history[:, :, :, :3], axis=3)
 
+            # 4.6.7. avg_q_max를 계산하기 위해 현재 모델 Q값의 max를 agent.avg_q_max에 더한다.
             agent.avg_q_max += np.amax(agent.model(np.float32(history / 255.))[0])
 
+            # 4.6.8. 만약 dead인 경우 dead를 True로 변경하고, start_life를 하나 줄여준다. 
             if start_life > info['ale.lives']:
                 dead = True
                 start_life = info['ale.lives']
 
+            # 리워드를 스코어에 더해준다.
             score += reward
+            # 리워드의 크기를 -1~1사이로 범위를 한정한다.
             reward = np.clip(reward, -1., 1.)
             # 샘플 <s, a, r, s'>을 리플레이 메모리에 저장 후 학습
             agent.append_sample(history, action, reward, next_history, dead)
@@ -220,6 +241,8 @@ if __name__ == "__main__":
                 if global_step % agent.update_target_rate == 0:
                     agent.update_target_model()
 
+            # 만약에 죽으면 4장의 프레임을 모두 동일한 값으로 초기화 한다.
+            # 죽지 않았으면 next_history를 그대로 history로 받는다.
             if dead:
                 history = np.stack((next_state, next_state,
                                     next_state, next_state), axis=2)
@@ -227,6 +250,7 @@ if __name__ == "__main__":
             else:
                 history = next_history
 
+            # 게임이 끝났으면 에피소드의 학습정보를 기록하여 출력한다.
             if done:
                 # 각 에피소드 당 학습 정보를 기록
                 if global_step > agent.train_start:
@@ -247,6 +271,6 @@ if __name__ == "__main__":
 
                 agent.avg_q_max, agent.avg_loss = 0, 0
 
-        # 1000 에피소드마다 모델 저장
-        if e % 1000 == 0:
+        # 500 에피소드마다 모델 저장
+        if e % 500 == 0:
             agent.model.save_weights("./save_model/model", save_format="tf")
