@@ -154,6 +154,7 @@ def pre_processing(observe):
 if __name__ == "__main__":
     # 1. 환경을 불러온다.
     env = gym.make('BreakoutDeterministic-v4')
+    print('env.frameskip:{}',env.frameskip)
     # 2. agent를 생성한다.
     agent = DQNAgent(action_size=3)
 
