@@ -144,6 +144,7 @@ class DQNAgent:
 
 
 # 학습속도를 높이기 위해 흑백화면으로 전처리
+# 입력 이미지를 84x84로 바꾸고 RGB를 Gray로 변경한다.
 def pre_processing(observe):
     processed_observe = np.uint8(
         resize(rgb2gray(observe), (84, 84), mode='constant') * 255)
