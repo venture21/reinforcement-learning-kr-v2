@@ -237,6 +237,7 @@ if __name__ == "__main__":
             agent.append_sample(history, action, reward, next_history, dead)
 
             # 리플레이 메모리 크기가 정해놓은 수치에 도달한 시점부터 모델 학습 시작
+            # train_start가 현재 50000으로 설정되어 있고, 50,000스텝이후부터 학습이 시작된다.
             if len(agent.memory) >= agent.train_start:
                 agent.train_model()
                 # 일정 시간마다 타겟모델을 모델의 가중치로 업데이트
